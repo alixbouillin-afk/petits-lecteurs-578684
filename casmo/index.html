@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Casmo — La Vallée des Dinosaures</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Ajout à l'écran d'accueil (iPad, Android) + jeu hors-ligne. Le manifeste
+     porte le nom, les icônes, le mode d'affichage ; sur iOS/iPadOS il ne
+     remplace PAS les metas « apple- » ci-dessous (mode application, titre sous
+     l'icône, barre d'état). La meta viewport au-dessus n'est pas touchée :
+     viewport-fit=cover est la condition pour qu'iOS renseigne les
+     env(safe-area-inset-*) utilisés par la couche tactile. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Casmo">
+<meta name="theme-color" content="#4e342e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<!--
+  « Casmo — La Vallée des Dinosaures » — jeu complet d'ENCODAGE (12/07/2026),
+  successeur de la démo Caisses-Mots validée par AB (concept 11/07, thème dino
+  12/07). Un mot est dicté, l'enfant déplace un petit T-Rex et frappe les
+  caisses-graphèmes dans l'ordre pour écrire le mot.
+  6 mondes × 3 niveaux × 4 mots (72 mots, casmo_data.js) : lettres simples →
+  grands mots → OU → ON/AN/IN → É/OI/EAU → CH + mots costauds. Multi-profils,
+  étoiles, bébés dinos à collectionner (1 par monde terminé), récap parent
+  (mots réussis/ratés) + réglages derrière porte-calcul.
+  Moteur : transplanté de la démo (physique validée, frappe fenêtre-tête,
+  playSeq double-filet, garde motEntendu, aide progressive 2 err / 20 s,
+  barème découverte) étendu aux graphèmes multi-lettres (ou, on, an, in, oi,
+  é, eau, ch — caisses et slots à police adaptative).
+  Audio : clips voix Denise (fr-FR-DeniseNeural) — W_* mots, LN_* noms de
+  lettres, SO_* sons des graphèmes, UI_* consignes. Textes des clips propres à
+  Casmo dans le manifeste generate_audio.py (section Casmo).
+  QA : ?qa=lexique (validation lexique seule) · ?qa=selftest (parcours
+  automatique des 72 mots, profil jetable, verdict dans le titre) ·
+  ?qa=monde=N (ouvre direct le monde N pour la QA visuelle des palettes) ·
+  ?qa=tactile (machine à états des commandes tactiles, verdict dans le titre :
+  canvas intact, pavés ≥ 64 px et ancrés aux coins, caisses dégagées, HUD et
+  aide-mémoire sans chevauchement, croix de sortie dégagée des pavés,
+  POURCENTAGE D'OCCULTATION DU DINO mesuré par balayage de joueur.x,
+  « Réécouter » tenu loin du saut, un appui = un saut, glissement, filets de
+  relâchement, aucune bande morte entre pavés, garde petit écran — seuil
+  unique 700 × 450 vérifié au pixel près, hauteurs réelles d'iPad en
+  navigateur comprises, clavier neutralisé et partie en pause dessous, issue
+  de secours persistée, clavier logiciel qui ne la déclenche pas —, garde de
+  désynchronisation, réglage parent. Sous le seuil, le verdict est NEUTRE
+  (« N/A ») et jamais « FAIL » : il n'y a alors rien à mesurer) ·
+  ?qa=selftestseance (fin de séance : quota du jour, au revoir automatique,
+  dodo, issue parent, éclosion avant l'au revoir, changement de jour,
+  réglage « Jamais », croix de sortie — verdict dans le titre).
+  CIBLE OFFICIELLE (décision AB du 12/09/2026) : TABLETTE et ORDINATEUR. Le
+  téléphone n'est pas pris en charge. La garde petit écran remplace alors le
+  jeu par un écran d'accueil qui le dit, et le jeu revient tout seul si la
+  fenêtre est agrandie (aucun rechargement). UNE SEULE CONDITION pour jouer,
+  celle d'AB : fenêtre ≥ 700 × 450 px — rien d'autre ne peut refuser une
+  partie. (La 4ᵉ passe a retiré la seconde condition géométrique de la 3ᵉ :
+  calibrée sur les tailles plein écran des tablettes, elle refusait de vrais
+  iPad en paysage une fois les barres du navigateur déduites. Le cas qu'elle
+  visait — fenêtre basse au doigt — est traité en RÉTRÉCISSANT les pavés
+  jusqu'à 64 px, jamais en interdisant la partie.) L'écran de garde porte en
+  outre un bouton discret « Parent : jouer quand même », persisté comme les
+  autres réglages et reprenable dans « Réglages (parents) » → « Petits
+  écrans » : la garde ne peut plus enfermer un parent hors de ses réglages.
+  Commandes tactiles (schéma S1, 12/09/2026, 3ᵉ passe : simplification après
+  l'abandon du format téléphone) : deux pavés de course ← → dans le coin bas
+  GAUCHE de l'écran, un pavé de saut ↑ dans le coin bas DROIT, et le pavé
+  « Réécouter » DU CÔTÉ GAUCHE lui aussi (jamais à côté du saut). Un appui =
+  un saut (aucune répétition automatique). La couche est « position: fixed »,
+  posée par-dessus le décor et hors de #stage : le canvas garde exactement la
+  taille qu'il a au clavier. UNE SEULE DISPOSITION : la rangée
+  [←][→][Réécouter] tombe sous les pattes du dino sur tous les formats retenus,
+  occultation mesurée nulle. Les pavés sont groupés dans deux conteneurs qui
+  captent eux-mêmes les doigts : aucune bande morte entre deux pavés voisins.
+  Le clavier continue de fonctionner en parallèle. ?tactile=1 / ?tactile=0
+  force ou coupe la couche ; sinon c'est le réglage parent « Commandes
+  tactiles » (automatique / toujours / jamais) qui décide.
+  Limite connue (choix, revue 13/07) : la sauvegarde localStorage est
+  last-writer-wins — deux fenêtres du jeu ouvertes en même temps peuvent
+  s'écraser mutuellement la progression. Usage prévu : une fenêtre à la fois.
+  Passe du 28/09/2026 (retours AB après des parties des enfants) :
+  1. course du dino ralentie (VMAX 340 → 250, freinage plus franc) — les
+     enfants dépassaient la caisse visée et retombaient entre deux lettres ;
+  2. pavés tactiles redessinés en BOULES légèrement en relief (← → ↑, plus la
+     pilule bleue « Réécouter ») : la boîte de chaque pavé reste un carré
+     contigu à ses voisins (cible ≥ 64 px, aucune bande morte), seule la
+     partie VISIBLE est ronde ;
+  3. « quitter » = une croix rouge en boule, en haut à gauche du cadre, à la
+     place de l'ancien bouton texte « La vallée » ; toujours en deux appuis
+     (le premier prévient à la voix), la boule pulse tant qu'elle est armée ;
+  4. FIN DE SÉANCE : quand un profil a fini deux niveaux NOUVEAUX dans la
+     journée — jamais encore réussis, bonus compris, un niveau rejoué ne compte
+     pas (décision AB 28/09) — (réglage parent « Fin de séance », actif par
+     défaut), Casmo
+     félicite (« Super, on a bien travaillé aujourd'hui ! À demain ! »), puis
+     la partie se referme sur l'écran-titre ; si l'enfant revient le même
+     jour, le dino dort et la carte ne rouvre qu'avec un parent (porte-calcul,
+     « encore une séance ») ou le lendemain. Un navigateur ne sait pas fermer
+     une fenêtre qu'il n'a pas ouverte lui-même : window.close() est tenté,
+     l'écran-titre est le repli réel sur iPad comme sur ordinateur.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Chalkboard SE", "Comic Sans MS", "Arial Rounded MT Bold", -apple-system, sans-serif;
+    background: radial-gradient(ellipse at 30% 10%, #24512b 0%, #143019 55%, #0a1a0d 100%);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    -webkit-user-select: none; user-select: none;
+  }
+  #stage { position: relative; width: min(100vw, calc(97vh * 16 / 9), 1180px); }
+  canvas#cv { width: 100%; height: auto; display: block; border-radius: 12px; }
+  button { font-family: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible {
+    outline: 4px solid #fff3b0; outline-offset: 3px;
+  }
+  .icone {
+    width: 1.15em; height: 1.15em; display: inline-block; flex: none;
+    vertical-align: -.18em; fill: none; stroke: currentColor; stroke-width: 2.2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* HUD du jeu */
+  .hudbtn {
+    position: absolute; z-index: 4; color: #fff8e1; font-size: clamp(14px, 1.8vw, 20px);
+    font-weight: bold; background: rgba(78, 52, 46, .78);
+    border: 3px solid rgba(255,248,225,.4); border-radius: 14px; padding: .45em .8em;
+    box-shadow: 0 5px 14px rgba(31,20,13,.22);
+  }
+  .hudbtn:active { background: rgba(255,143,0,.55); }
+  /* Coin haut gauche du cadre (28/09) : la croix rouge de sortie, puis
+     « Réécouter » à sa droite. La croix est une BOULE (demande AB) : rouge
+     franc, relief léger, croix blanche ; même taille de cible qu'un bouton du
+     HUD. Le dégagement entre les deux (--croix-air) est mesuré par ?qa=tactile
+     (plancher 24 px). */
+  /* 48 px au plancher (revue 28/09 : 4,8 vw donnait 40 px sur iPad en portrait,
+     sous les 44 pt d'Apple pour un doigt) ; l'air de 30 px absorbe la
+     pulsation (scale 1,14 sur 60 px = +4,2 px de chaque côté) */
+  :root { --croix: clamp(48px, 5.2vw, 60px); --croix-air: 30px; }
+  #btn-ecoute { left: calc(1.6% + var(--croix) + var(--croix-air)); top: 2.5%; }
+  #btn-quitter {
+    left: 1.6%; top: 2.5%; width: var(--croix); height: var(--croix);
+    padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    color: #fff; border: 3px solid rgba(255,255,255,.72);
+    background:
+      radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 44%),
+      radial-gradient(circle at 50% 55%, #ff6659 0%, #e53935 55%, #b71c1c 100%);
+    box-shadow: 0 6px 14px rgba(31,20,13,.35), inset 0 -5px 8px rgba(0,0,0,.22),
+                inset 0 3px 6px rgba(255,255,255,.35);
+  }
+  #btn-quitter .icone { width: 58%; height: 58%; stroke-width: 3.4;
+                        filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+  #btn-quitter:active { transform: translateY(2px) scale(.96); filter: brightness(.92);
+                        box-shadow: 0 2px 6px rgba(31,20,13,.3), inset 0 3px 8px rgba(0,0,0,.3); }
+  /* armée (premier appui) : elle pulse jusqu'au second appui ou 3 s. On anime
+     la propriété « scale » et non « transform » : une déclaration animée prime
+     sur toute la cascade, :active compris — avec transform dans les keyframes,
+     la boule ne s'enfonçait plus au second appui (revue 28/09). */
+  #btn-quitter.arme { animation: croix-pulse .7s ease-in-out infinite alternate; }
+  @keyframes croix-pulse { from { scale: 1; } to { scale: 1.14; } }
+  /* purement informatifs : les doigts les traversent (sinon un appui sur le
+     compteur ou sur la consigne ne ferait rien du tout) */
+  #hud-prog, #hint { pointer-events: none; }
+  #hud-prog { position: absolute; z-index: 4; right: 1.6%; top: 2.5%; font-size: clamp(14px, 1.9vw, 21px);
+              font-weight: bold; text-align: right; color: #fff8e1;
+              background: rgba(78, 52, 46, .78); border: 3px solid rgba(255,248,225,.4);
+              border-radius: 14px; padding: .3em .7em; }
+  #hud-prog:empty { display: none; }
+  #hint { position: absolute; z-index: 4; left: 50%; bottom: 1.5%; transform: translateX(-50%);
+          font-size: clamp(12px, 1.45vw, 16px); white-space: nowrap;
+          color: #fff8e1; background: rgba(63,43,35,.8); border-radius: 12px;
+          padding: .38em .8em; text-shadow: 0 1px 4px rgba(0,0,0,.65);
+          box-shadow: 0 4px 14px rgba(31,20,13,.18); }
+
+  /* écrans plein cadre */
+  .ecran {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2.2%;
+    text-align: center; border-radius: 12px; z-index: 5;
+    background:
+      radial-gradient(ellipse at 50% 18%, rgba(39,87,48,.78), rgba(12,31,17,.82) 68%),
+      rgba(10, 26, 13, .78);
+    overflow: auto; padding: 2.5%; backdrop-filter: blur(1.5px);
+  }
+  .ecran h1 { font-size: clamp(20px, 4vw, 42px); text-shadow: 0 3px 10px #000; }
+  .ecran h2 { font-size: clamp(17px, 2.6vw, 28px); text-shadow: 0 2px 8px #000; }
+  .ecran p  { font-size: clamp(14px, 1.9vw, 21px); opacity: .92; max-width: 82%; }
+  .titre-carte {
+    width: min(76%, 590px); padding: clamp(12px, 2.3vw, 24px) clamp(18px, 3.2vw, 34px);
+    border: 3px solid rgba(255,243,176,.36); border-radius: 28px;
+    background: linear-gradient(155deg, rgba(87,132,64,.72), rgba(43,87,46,.7));
+    box-shadow: 0 18px 44px rgba(5,18,8,.3), inset 0 1px rgba(255,255,255,.12);
+  }
+  .logo-casmo { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  #logo-dino { width: clamp(90px, 15vw, 150px); height: auto; flex: none; }
+  .titre-carte h1 { font-size: clamp(32px, 6.5vw, 68px); letter-spacing: .02em; }
+  .titre-carte h2 { color: #fff3b0; margin-top: -.08em; }
+  .titre-carte p { max-width: 100%; margin: .7em auto .9em; }
+  .gros {
+    font-weight: bold; color: #4a2c00; font-size: clamp(17px, 2.6vw, 28px);
+    padding: .5em 1.3em; border: none; border-radius: 18px;
+    background: linear-gradient(180deg, #ffe082, #ffb300);
+    box-shadow: 0 6px 22px -6px #ffb300;
+  }
+  .gros:active { transform: scale(.96); }
+  .doux {
+    font-weight: bold; color: #fff8e1; font-size: clamp(13px, 1.7vw, 18px);
+    padding: .45em 1em; border-radius: 14px;
+    background: rgba(78, 52, 46, .85); border: 3px solid rgba(255,248,225,.35);
+  }
+  .doux:active { background: rgba(255,143,0,.5); }
+  [hidden] { display: none !important; }
+
+  /* profils */
+  #profils-liste { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; max-width: 86%; }
+  .carte-profil {
+    min-width: 120px; padding: 14px 20px; border-radius: 16px; border: 3px solid #8d6e63;
+    background: linear-gradient(180deg, #b98a5a, #96683a); color: #fff8e1;
+    font-size: clamp(16px, 2.2vw, 24px); font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,.4);
+  }
+  .carte-profil:active { transform: scale(.96); }
+  .carte-plus { background: rgba(255,248,225,.12); border-style: dashed; }
+  #np-prenom {
+    font-family: inherit; font-size: clamp(18px, 2.6vw, 28px); font-weight: bold;
+    text-align: center; width: min(60%, 340px); padding: .4em .6em;
+    border-radius: 14px; border: 3px solid #8d6e63; background: #fff8e1; color: #4e342e;
+  }
+
+  /* carte de la vallée */
+  #carte-mondes {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 13px; width: min(94%, 850px);
+  }
+  .carte-monde {
+    position: relative; min-height: 82px; border-radius: 18px;
+    border: 3px solid rgba(255,243,176,.42); padding: 11px 10px 10px; color: #fff;
+    text-shadow: 0 2px 4px rgba(0,0,0,.55); display: flex; flex-direction: column; gap: 4px;
+    box-shadow: 0 7px 18px rgba(15,20,11,.23), inset 0 1px rgba(255,255,255,.18);
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .carte-monde .cm-nom { font-weight: bold; font-size: clamp(14px, 1.65vw, 18px); }
+  .carte-monde .cm-tag { font-size: clamp(11px, 1.2vw, 14px); opacity: .98; }
+  .carte-monde .cm-etoiles { font-size: clamp(12px, 1.4vw, 16px); }
+  .carte-monde:active { transform: scale(.96); }
+  .carte-monde.verrouille { filter: grayscale(.85) brightness(.6); }
+  .carte-monde.verrouille::after {
+    content: "🔒"; position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 34px;
+  }
+  #carte-haut { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  #nid {
+    display: flex; gap: 8px; align-items: flex-end; justify-content: center;
+    padding: 4px 12px 7px; border-radius: 18px;
+    background: rgba(78,52,46,.38); border: 2px solid rgba(255,248,225,.14);
+  }
+  #nid canvas { width: 72px; height: 72px; }
+  #nid .nid-slot { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 72px; }
+  #nid .nid-nom { font-size: 12px; opacity: .95; }
+
+  /* modal niveaux */
+  #niveaux-liste { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn-niveau {
+    width: clamp(110px, 13vw, 150px); padding: 14px 8px; border-radius: 16px;
+    border: 3px solid #8d6e63; background: linear-gradient(180deg, #b98a5a, #96683a);
+    color: #fff8e1; font-weight: bold; font-size: clamp(14px, 1.9vw, 19px);
+    display: flex; flex-direction: column; gap: 6px; align-items: center;
+  }
+  .btn-niveau:active { transform: scale(.96); }
+  .btn-niveau.verrouille { filter: grayscale(.85) brightness(.6); }
+
+  /* réglages + récap */
+  .set-ligne { display: flex; gap: 12px; align-items: center; justify-content: center;
+               font-size: clamp(14px, 1.9vw, 20px); flex-wrap: wrap; }
+  .note-parent { font-size: clamp(11px, 1.35vw, 15px) !important; opacity: .8 !important; }
+  #set-horsligne { font-weight: bold; color: #fff3b0; }
+  #set-stockage-alert {
+    color: #fff3b0; background: rgba(124,54,43,.72); border: 2px solid rgba(255,224,130,.35);
+    border-radius: 12px; padding: .4em .75em;
+  }
+  #gate-choix { display: flex; gap: 14px; justify-content: center; }
+  .set-choix {
+    font-size: clamp(18px, 2.6vw, 28px); font-weight: bold; padding: .35em .8em;
+    border-radius: 14px; border: 3px solid #8d6e63;
+    background: linear-gradient(180deg, #b98a5a, #96683a); color: #fff8e1;
+  }
+  #recap-table { border-collapse: collapse; font-size: clamp(12px, 1.5vw, 16px);
+                 background: rgba(255,248,225,.07); border-radius: 10px; }
+  #recap-table td, #recap-table th { padding: 4px 14px; border-bottom: 1px solid rgba(255,248,225,.15); }
+  #recap-scroll { max-height: 46vh; overflow-y: auto; border-radius: 10px; }
+
+  /* récap de niveau + éclosion (par-dessus le canvas de jeu) */
+  #ov-recap .grosses-etoiles { font-size: clamp(30px, 6vw, 60px); letter-spacing: .12em; }
+  #ov-eclosion {
+    background:
+      radial-gradient(circle at 50% 44%, rgba(129,171,91,.76), rgba(20,50,25,.9) 65%),
+      rgba(10,26,13,.85);
+  }
+  #cv-oeuf { width: min(58%, 400px); }
+  .rangee-boutons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+
+  /* ---- commandes tactiles (schéma S1, 3ᵉ passe 12/09/2026) ---------------
+     Trois grands pavés translucides + un pavé de réécoute, posés sur une
+     couche « position: fixed » ANCRÉE AUX COINS BAS DE L'ÉCRAN, totalement
+     indépendante du cadre de jeu : aucun bandeau n'est réservé, #stage n'est
+     pas touché, le canvas garde donc EXACTEMENT la taille qu'il a au clavier.
+
+     DEUX GROUPES, PAS QUATRE PAVÉS LIBRES (défaut N4 de la 2ᵉ revue). Les
+     pavés vivent dans deux conteneurs « .tz-grp » qui captent eux-mêmes les
+     doigts et dont le rectangle est exactement l'union des pavés : le creux
+     entre deux coins arrondis appartient au groupe, donc un doigt qui tombe
+     pile entre deux pavés est redirigé vers le plus proche (rattrapage de
+     26 px du moteur) au lieu de ne rien déclencher. Plus aucune bande morte.
+
+     UNE SEULE DISPOSITION depuis l'abandon du format téléphone (décision AB
+     du 12/09/2026 : la cible est la TABLETTE et l'ORDINATEUR). La rangée
+     [←][→][Réécouter] occupe le coin bas gauche, [↑] le coin bas droit ; sur
+     tous les formats retenus elle tombe SOUS les pattes du dino, occultation
+     mesurée nulle. Toute la machinerie « serrée » (pavés rétrécis, Réécouter
+     empilé au-dessus des flèches, opacités de repos descendues à 0,15, mode
+     dégradé à trois pavés, classes tz-serre / tz-empile / tz-sans-ecoute /
+     tz-sans-hint) n'existait que pour le téléphone en paysage : elle a été
+     retirée. Les pavés retrouvent donc leur taille et leur contraste pleins.
+     Portée du pouce : course collée au bord GAUCHE, saut collé au bord DROIT,
+     réécoute côté gauche — tout est sous les pouces.
+
+     Unités : dvh / dvw quand le navigateur les connaît (la barre d'outils de
+     Safari iOS fausse vh en paysage), repli vh / vw sinon. L'ancrage « fixed »
+     rend de toute façon le problème sans objet. La page déclare
+     viewport-fit=cover (meta viewport, en tête de fichier), qui est la
+     condition documentée pour qu'iOS renseigne env(safe-area-inset-*) au lieu
+     de le laisser à zéro. HONNÊTETÉ : cet effet ne peut se constater QUE sur
+     un appareil à encoche ou à indicateur d'accueil — il n'est pas vérifiable
+     ici, et une sonde de navigateur de bureau ne prouve rien (Chrome calcule
+     0 px avec comme sans l'attribut). Partout ailleurs les insets valent 0 et
+     la marge se réduit aux 6 px de base. Le moteur ne recopie plus ces
+     valeurs : il MESURE la position réelle des pavés (ajustePaves()), donc un
+     inset non nul est pris en compte sans calcul en dur. */
+  :root {
+    --pave-h: clamp(68px, 12vh, 116px);      /* côté des boîtes carrées ← → ↑ (boule + air) */
+    --ecoute-w: clamp(96px, 15vw, 150px);    /* largeur de la pilule « Réécouter » */
+    --bord-b: calc(6px + env(safe-area-inset-bottom, 0px));
+    --bord-g: calc(6px + env(safe-area-inset-left, 0px));
+    --bord-d: calc(6px + env(safe-area-inset-right, 0px));
+  }
+  @supports (height: 1dvh) {
+    :root { --pave-h: clamp(68px, 12dvh, 116px); }
+  }
+  @supports (width: 1dvw) {
+    :root { --ecoute-w: clamp(96px, 15dvw, 150px); }
+  }
+  /* pas de rebond de scroll ni de zoom au double-tap quand on joue au doigt ;
+     surtout PAS d'overflow: hidden — c'est lui qui, dans la version d'essai,
+     rendait les pavés inatteignables quand la barre d'outils du navigateur
+     poussait le bas de page hors de l'écran */
+  body.tactile { overscroll-behavior: none; touch-action: manipulation; }
+  /* DÉGAGEMENT DE LA SORTIE. Jusqu'au 28/09, « La vallée » vivait en bas à
+     gauche et devait remonter sous « Réécouter » dès que la couche tactile
+     était là (12,2 px seulement au-dessus du pavé ← sur iPad 1024 × 768, et
+     26 px de RECOUVREMENT sur iPad mini 1133 × 744 — régressions R2 et C4 des
+     passes de septembre). La croix rouge vit maintenant dans le coin HAUT
+     gauche, à l'opposé des pavés, quel que soit le mode d'entrée : plus aucune
+     règle dépendante de body.tactile, plus de placeQuitter(). ?qa=tactile
+     continue de mesurer ses trois voisinages — #btn-ecoute, #hint, les deux
+     groupes de pavés — avec un plancher de 24 px. */
+  /* (Régression R1 : la règle « body.tactile #hint { white-space: normal ;
+     max-width: 46% } » a été SUPPRIMÉE. Elle faisait doubler la hauteur de
+     l'aide-mémoire pour régler un chevauchement qui n'existait qu'avec
+     l'ancienne place du pavé « Réécouter ». L'aide-mémoire garde sa ligne
+     unique d'origine ; au doigt son texte est plus court, ce qui lui suffit
+     pour tenir dans le couloir laissé entre les deux groupes.)
+     Filet qui REMPLACE l'ancienne classe tz-sans-hint : l'aide-mémoire est
+     posé par rapport au cadre de jeu, les pavés par rapport à l'ÉCRAN, si
+     bien qu'une fenêtre basse et large (un navigateur d'ordinateur non
+     maximisé, ~1000 × 640) peut les faire se croiser. Plutôt que d'escamoter
+     l'aide-mémoire, on le fait passer DESSOUS : un pavé n'est jamais caché,
+     c'est la ligne destinée aux parents qui cède le passage. z-index 2 <
+     3 (#tactile) < 4 (HUD) < 5 (menus). */
+  body.tactile #hint { z-index: 2; }
+  /* C9 — l'aide-mémoire passait à 6,4 px au-dessus des pavés sur iPad
+     1024 × 768. On lui donne de l'air de la seule façon sans risque : en
+     amincissant SA boîte (le texte reste sur une ligne), et non en la remontant
+     sur les pattes du dino. Le moteur ajoute ensuite le relèvement encore
+     possible sous la ligne de sol (placeHint()). Une boîte plus petite ne peut
+     que DÉGAGER ses voisins : aucune régression possible du côté de
+     « La vallée », contrairement à la règle R1 retirée plus haut. */
+  body.tactile #hint { padding: .22em .8em; }
+
+  #tactile {
+    position: fixed; inset: 0; z-index: 3;
+    pointer-events: none;            /* seuls les GROUPES captent les doigts :
+                                        les menus et les boutons du HUD restent
+                                        cliquables à travers la couche */
+  }
+  .tz-grp {
+    position: absolute; bottom: var(--bord-b);
+    display: flex; align-items: stretch; gap: 0;
+    pointer-events: auto;            /* le groupe capte, y compris entre deux pavés */
+    touch-action: none; -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
+  }
+  #tg-course { left: var(--bord-g); }
+  #tg-saut   { right: var(--bord-d); }
+  /* BOULES EN RELIEF (28/09, demande AB : « une petite boule légèrement en
+     relief avec les flèches »). Un pavé « .tz » reste la BOÎTE DE CAPTURE —
+     carrée pour ← → ↑, rectangulaire pour « Réécouter » —, transparente et
+     contiguë à ses voisines : c'est elle que mesurent zoneEn(), ajustePaves()
+     et ?qa=tactile (cible ≥ 64 px, aucune bande morte, occultation du dino).
+     La partie VISIBLE est « .boule », à 88 % de la boîte : les sphères
+     voisines laissent un jour entre elles sans qu'un doigt tombé dans ce jour
+     ne se perde (il est dans la boîte, donc dans le groupe). Le relief tient à
+     trois choses : un reflet en haut à gauche, un dégradé radial qui fonce
+     vers le bord, une ombre portée + une ombre interne basse. Enfoncée
+     (.appui) : la boule descend de 2 px, s'assombrit, et l'ombre portée cède
+     la place à une ombre interne. */
+  .tz {
+    display: flex; align-items: center; justify-content: center;
+    color: #fff8e1; line-height: 1; font-weight: bold;
+    text-shadow: 0 2px 6px rgba(0,0,0,.55);
+    background: transparent; border: none; box-shadow: none;
+  }
+  .tz-course, #tz-saut { width: var(--pave-h); height: var(--pave-h); }
+  /* « Réécouter » se range à DROITE des deux flèches, dans la même rangée du
+     bas — donc à la même hauteur, sous les pattes du dino, et jamais voisin du
+     pavé de saut qui vit dans l'autre coin. Sa largeur suit son CONTENU
+     (revue 28/09 : à 94 % de 15 vw, le mot mordait le liseré sur iPad en
+     portrait, où vw est petit et la police — 1,7 vh — grande) : --ecoute-w est
+     un minimum, la pilule s'élargit au besoin, la boîte de capture aussi. */
+  #tz-ecoute {
+    width: auto; min-width: var(--ecoute-w); padding: 0 calc(var(--ecoute-w) * .03);
+    height: var(--pave-h); font-size: clamp(11px, 1.7vh, 16px);
+  }
+  .boule {
+    width: 88%; height: 88%; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center; gap: .3em;
+    border: 3px solid rgba(255,248,225,.8);
+    box-shadow: 0 8px 18px rgba(10,26,13,.38), inset 0 -7px 12px rgba(0,0,0,.22),
+                inset 0 4px 8px rgba(255,255,255,.4);
+    background:
+      radial-gradient(circle at 34% 28%, rgba(255,255,255,.62), rgba(255,255,255,0) 44%),
+      radial-gradient(circle at 50% 56%, #f0c07a 0%, #d99a4d 55%, #a4662b 100%);   /* bois clair, comme les caisses */
+    transition: transform .06s ease, box-shadow .06s ease, filter .06s ease, border-color .06s ease;
+  }
+  #tz-saut .boule {
+    background:
+      radial-gradient(circle at 34% 28%, rgba(255,255,255,.62), rgba(255,255,255,0) 44%),
+      radial-gradient(circle at 50% 56%, #ffe082 0%, #ffb300 55%, #e65100 100%);   /* doré, comme « Jouer » */
+  }
+  #tz-ecoute .boule {
+    width: auto; min-width: calc(var(--ecoute-w) * .94); white-space: nowrap;
+    border-radius: 999px; padding: 0 .55em;
+    background:
+      radial-gradient(circle at 30% 25%, rgba(255,255,255,.55), rgba(255,255,255,0) 44%),
+      radial-gradient(ellipse at 50% 56%, #7ec8f7 0%, #2196f3 60%, #0d47a1 100%);  /* bleu, comme la caisse de réécoute */
+  }
+  /* flèche : trait blanc DOUBLÉ d'un contour brun (deux tracés superposés) —
+     un trait blanc seul se perdait au centre des boules claires (contraste
+     1,3:1 sur le doré, revue 28/09) ; le brun est celui du texte de « Jouer » */
+  .boule .fleche {
+    width: 54%; height: 54%; fill: none; stroke-linecap: round; stroke-linejoin: round;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
+  }
+  .boule .fleche .trait-ombre { stroke: #4a2c00; stroke-width: 6.6; }
+  .boule .fleche .trait { stroke: #fff; stroke-width: 3.2; }
+  #tz-ecoute .icone { width: 1.5em; height: 1.5em; stroke-width: 2.4; }
+  /* enfoncée : elle descend, s'assombrit, et un anneau orange la cerne — un
+     changement de teinte qui se voit même sous le pouce (revue 28/09) */
+  .tz.appui .boule {
+    transform: translateY(2px) scale(.95); filter: brightness(.9);
+    border-color: #ff8f00;
+    box-shadow: 0 0 0 4px rgba(255,143,0,.55), 0 2px 6px rgba(10,26,13,.3),
+                inset 0 4px 10px rgba(0,0,0,.34);
+  }
+
+  /* ---- garde petit écran (décision AB du 12/09/2026) ----------------------
+     Casmo se joue sur TABLETTE ou sur ORDINATEUR. Sous le seuil — fenêtre de
+     700 × 450 px, ET RIEN D'AUTRE —, on n'affiche pas un jeu injouable : cet
+     écran prend toute la place, dans le ton du jeu. Le moteur le lève et le
+     baisse au redimensionnement comme à la rotation, sans rechargement — la
+     partie en cours reste intacte dessous, et EN PAUSE (le clavier ne pilote
+     plus rien tant que la garde est là).
+     L'écran porte une issue de secours : la garde est en z-index 20, au-dessus
+     des menus, donc sans ce bouton un parent qui tombe dessous ne peut plus
+     atteindre ses réglages. Le bouton est écrit pour un parent et rendu
+     discret, pour qu'un enfant n'y voie pas le bouton « Jouer ». */
+  #ecran-format {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center; padding: 4vw;
+    background:
+      radial-gradient(ellipse at 50% 18%, rgba(39,87,48,.92), rgba(12,31,17,.97) 68%),
+      #0a1a0d;
+    text-align: center;
+  }
+  #ecran-format .titre-carte { width: min(94%, 520px); }
+  #ecran-format h1 { font-size: clamp(26px, 9vw, 46px); text-shadow: 0 3px 10px #000; }
+  #ecran-format h2 { font-size: clamp(15px, 4.6vw, 23px); text-shadow: 0 2px 8px #000; }
+  #ecran-format p { font-size: clamp(13px, 3.7vw, 18px); max-width: 100%;
+                    margin: .8em auto 0; opacity: .93; }
+  #ecran-format .format-astuce { color: #fff3b0; opacity: 1; }
+  /* issue de secours : volontairement discrète (petit, sans fond, souligné),
+     et libellée pour un parent — un enfant de 5 ans n'y lit pas « Jouer » */
+  #format-passer {
+    margin-top: 1.4em; background: none; border: none; color: #cfe3c4;
+    font-size: clamp(11px, 2.6vw, 14px); text-decoration: underline;
+    text-underline-offset: 3px; opacity: .72; padding: .5em .7em;
+    /* seule sortie de la garde, et elle se vise au doigt : plancher de cible
+       tactile à 44 px, obtenu par la hauteur et non par le corps de police —
+       le bouton reste discret pour qu'un enfant n'y lise pas « Jouer ». */
+    min-height: 44px;
+  }
+  #format-passer:active { opacity: 1; color: #fff3b0; }
+  /* même grammaire pour toute « issue de parent » : petit, sans fond,
+     souligné, libellé pour un adulte (fin de séance : « encore une séance ») */
+  .lien-parent {
+    margin-top: 1.2em; background: none; border: none; color: #cfe3c4;
+    font-size: clamp(11px, 1.3vw, 14px); text-decoration: underline;
+    text-underline-offset: 3px; opacity: .72; padding: .5em .7em; min-height: 44px;
+  }
+  .lien-parent:active { opacity: 1; color: #fff3b0; }
+
+  /* ---- fin de séance (28/09) ---------------------------------------------
+     Deux visages du même écran : l'au revoir (« Super, on a bien travaillé
+     aujourd'hui ! ») après le deuxième niveau du jour, et le dodo (« Chut…
+     Casmo dort ! ») si l'enfant revient le même jour. Le dino est dessiné par
+     le moteur sur #cv-seance, comme l'œuf. */
+  /* bravo : les verts dorés de l'éclosion (même famille que le récap) ;
+     dodo (.nuit) : bleu nuit, la seule teinte nocturne du jeu, réservée au
+     sommeil (revue 28/09 : un seul fond pour les deux visages était une
+     rupture de palette sur les félicitations) */
+  #ov-seance {
+    background:
+      radial-gradient(circle at 50% 44%, rgba(129,171,91,.76), rgba(20,50,25,.9) 65%),
+      rgba(10,26,13,.85);
+  }
+  #ov-seance.nuit {
+    background:
+      radial-gradient(circle at 50% 40%, rgba(63,81,140,.55), rgba(12,20,45,.92) 68%),
+      rgba(8,12,30,.9);
+  }
+  /* borné par la LARGEUR et par la HAUTEUR du cadre (le canvas est un élément
+     remplacé à ratio intrinsèque : max-width et max-height se combinent sans
+     déformer) : à 700 × 450 et sur iPad en portrait (cadre de 432 px de haut),
+     un canvas de 220 px faisait déborder titre et liens parent hors du cadre,
+     sans défilement possible (revue 28/09, mesuré) */
+  #cv-seance { width: auto; height: auto; max-width: min(52%, 340px); max-height: 42%; }
+  #ov-seance h2 { font-size: clamp(20px, 3.4vw, 36px); }
+  #ov-seance p { font-size: clamp(16px, 2.3vw, 26px); color: #fff3b0; }
+  #ov-seance .lien-parent { margin-top: .1em; }
+  #ov-seance .liens-parent { display: flex; gap: 1.5em; flex-wrap: wrap; justify-content: center; }
+  /* sous la garde, plus un seul pavé actif : un doigt ne doit pas piloter un
+     dino qu'on ne voit pas */
+  body.format-trop-petit #tactile { display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" width="960" height="540"></canvas>
+  <button id="btn-ecoute" class="hudbtn" hidden><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8a5 5 0 0 1 0 8M19.5 5.5a9 9 0 0 1 0 13"/></svg> Réécouter</button>
+  <button id="btn-quitter" class="hudbtn" hidden aria-label="Quitter le niveau (deux appuis)" title="Quitter le niveau"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <div id="hud-prog"></div>
+  <div id="hint" hidden>← → pour bouger &nbsp;·&nbsp; ↑ pour sauter &nbsp;·&nbsp; tape les caisses avec la tête !</div>
+
+  <div id="ecran-titre" class="ecran">
+    <div class="titre-carte">
+      <div class="logo-casmo"><canvas id="logo-dino" width="150" height="90"></canvas><h1>Casmo</h1></div>
+      <h2>La Vallée des Dinosaures</h2>
+      <p>Écoute le mot, puis saute et tape les caisses-lettres dans l'ordre pour l'écrire !</p>
+      <button id="btn-titre-go" class="gros">▶ Jouer</button>
+    </div>
+  </div>
+
+  <div id="ecran-profils" class="ecran" hidden>
+    <h2>Qui joue aujourd'hui ?</h2>
+    <div id="profils-liste"></div>
+  </div>
+
+  <div id="ecran-nouveau-profil" class="ecran" hidden>
+    <h2>Écris ton prénom !</h2>
+    <input id="np-prenom" maxlength="12" autocomplete="off" spellcheck="false">
+    <div class="rangee-boutons">
+      <button id="np-ok" class="gros">✓ C'est parti !</button>
+      <button id="np-retour" class="doux">↩ Retour</button>
+    </div>
+  </div>
+
+  <div id="ecran-carte" class="ecran" hidden>
+    <div id="carte-haut">
+      <h2 id="carte-titre">La Vallée</h2>
+      <button id="btn-profil" class="doux" aria-label="Changer de profil"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg></button>
+      <button id="btn-reglages" class="doux" aria-label="Réglages"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.38.35.72.65.99.3.27.69.41 1.1.41h.1v4h-.1c-.82 0-1.52.52-1.75 1.3z"/></svg></button>
+    </div>
+    <div id="carte-mondes"></div>
+    <div id="nid"></div>
+  </div>
+
+  <div id="ecran-niveaux" class="ecran" hidden>
+    <h2 id="niveaux-titre"></h2>
+    <p id="niveaux-tag"></p>
+    <div id="niveaux-liste"></div>
+    <button id="niveaux-retour" class="doux">↩ La vallée</button>
+  </div>
+
+  <div id="ecran-gate" class="ecran" hidden>
+    <h2 id="gate-question"></h2>
+    <div id="gate-choix"></div>
+    <button id="gate-retour" class="doux">↩ Retour</button>
+  </div>
+
+  <div id="ecran-reglages" class="ecran" hidden>
+    <h2>Réglages (parents)</h2>
+    <div class="set-ligne"><span>Son</span><button id="set-son" class="doux"></button></div>
+    <p class="note-parent">⚠️ Casmo dicte les mots à la voix : sans son, le jeu n'est pas jouable.</p>
+    <p id="set-stockage-alert" class="note-parent" hidden>La progression ne peut pas être sauvegardée sur cet appareil.</p>
+    <div class="set-ligne"><span>Commandes tactiles</span><button id="set-tactile" class="doux">Automatique</button></div>
+    <p class="note-parent">Les pavés ← → ↑ posés sur le jeu. « Automatique » : affichés si l'appareil a un écran tactile. Sur un ordinateur portable tactile utilisé au clavier, choisir « Jamais ».</p>
+    <div class="set-ligne"><span>Petits écrans</span><button id="set-petit-ecran" class="doux"></button></div>
+    <p class="note-parent">Casmo est prévu pour une fenêtre d'au moins 700 × 450 points (tablette, ordinateur). « Autorisés » laisse jouer en dessous, avec des commandes qui peuvent gêner le dinosaure.</p>
+    <div class="set-ligne"><span>Fin de séance</span><button id="set-seance" class="doux"></button></div>
+    <p class="note-parent">Réglage commun à tous les profils, compteur par enfant : quand un profil a fini deux niveaux nouveaux dans la journée (jamais encore réussis, bonus compris ; un niveau rejoué ne compte pas), Casmo le félicite, lui dit à demain et referme la partie. S'il revient le même jour, le dino dort. <span id="set-seance-jour"></span></p>
+    <div class="set-ligne"><button id="set-seance-plus" class="doux">➕ Accorder une séance de plus aujourd'hui</button></div>
+    <div class="set-ligne"><span>Disponible hors ligne</span><span id="set-horsligne">…</span></div>
+    <p class="note-parent">Quand c'est « ✓ prêt », le jeu et toutes les voix sont enregistrés sur l'appareil : Casmo se lance sans connexion. Ajoute-le à l'écran d'accueil de la tablette.</p>
+    <div class="set-ligne"><span>Tout débloquer</span><button id="set-unlock" class="doux"></button></div>
+    <div class="set-ligne"><button id="set-recap" class="doux">📋 Les mots de l'enfant</button></div>
+    <div class="set-ligne"><button id="set-reset" class="doux">🗑 Effacer la progression de ce profil</button></div>
+    <div class="set-ligne"><button id="set-suppr" class="doux">❌ Supprimer ce profil</button></div>
+    <button id="set-retour" class="doux">↩ La vallée</button>
+  </div>
+
+  <div id="ecran-recap" class="ecran" hidden>
+    <h2>Les mots travaillés</h2>
+    <p>Astuce : refaire écrire sur papier les mots avec des ✘ aide beaucoup !</p>
+    <div id="recap-scroll"><table id="recap-table"></table></div>
+    <button id="recap-retour" class="doux">↩ Réglages</button>
+  </div>
+
+  <div id="ov-recap" class="ecran" hidden>
+    <h2 id="recap-niveau-titre"></h2>
+    <div class="grosses-etoiles" id="recap-etoiles"></div>
+    <div class="rangee-boutons">
+      <button id="recap-suite" class="gros">▶ Continuer</button>
+      <button id="recap-carte" class="doux">🗺 La vallée</button>
+    </div>
+  </div>
+
+  <div id="ov-eclosion" class="ecran" hidden>
+    <h2 id="eclosion-titre">Oh ! Un œuf !</h2>
+    <canvas id="cv-oeuf" width="340" height="300"></canvas>
+    <p id="eclosion-texte"></p>
+    <button id="eclosion-ok" class="gros" hidden>🗺 La vallée</button>
+  </div>
+
+  <!-- fin de séance (28/09) : au revoir après le 2ᵉ niveau du jour, ou dodo
+       si l'enfant revient le même jour. Le bouton de retour n'existe que sur
+       le dodo ; l'issue parent (porte-calcul) rouvre une séance. -->
+  <div id="ov-seance" class="ecran" hidden>
+    <h2 id="seance-titre"></h2>
+    <canvas id="cv-seance" width="340" height="220"></canvas>
+    <p id="seance-texte"></p>
+    <button id="seance-retour" class="doux" hidden>↩ Retour</button>
+    <div class="liens-parent">
+      <button id="seance-parent" class="lien-parent" hidden>Parent : encore une séance aujourd'hui</button>
+      <button id="seance-reglages" class="lien-parent" hidden>Parent : réglages</button>
+    </div>
+  </div>
+</div>
+
+<!-- Commandes tactiles (schéma S1) : ← → pour courir (coin bas gauche, pouce
+     gauche), ↑ pour sauter (coin bas droit, pouce droit), et la réécoute du
+     mot DU CÔTÉ GAUCHE elle aussi — jamais collée au saut. La couche est
+     « position: fixed » et vit HORS de #stage : elle n'enlève pas un pixel au
+     canvas. Le moteur l'affiche en jeu seulement, selon le réglage parent.
+     Les pavés sont enfermés dans deux GROUPES : ce sont eux qui portent les
+     écouteurs, si bien qu'un doigt tombé entre deux pavés est rattrapé au
+     lieu de tomber dans le vide. -->
+<div id="tactile" hidden aria-hidden="true">
+  <div class="tz-grp" id="tg-course">
+    <div class="tz tz-course" id="tz-gauche"><span class="boule"><svg class="fleche" viewBox="0 0 24 24"><path class="trait-ombre" d="M20 12H5M11 5l-7 7 7 7"/><path class="trait" d="M20 12H5M11 5l-7 7 7 7"/></svg></span></div>
+    <div class="tz tz-course" id="tz-droite"><span class="boule"><svg class="fleche" viewBox="0 0 24 24"><path class="trait-ombre" d="M4 12h15M13 5l7 7-7 7"/><path class="trait" d="M4 12h15M13 5l7 7-7 7"/></svg></span></div>
+    <div class="tz" id="tz-ecoute"><span class="boule"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8a5 5 0 0 1 0 8M19.5 5.5a9 9 0 0 1 0 13"/></svg>Réécouter</span></div>
+  </div>
+  <div class="tz-grp" id="tg-saut">
+    <div class="tz" id="tz-saut"><span class="boule"><svg class="fleche" viewBox="0 0 24 24"><path class="trait-ombre" d="M12 20V5M5 11l7-7 7 7"/><path class="trait" d="M12 20V5M5 11l7-7 7 7"/></svg></span></div>
+  </div>
+</div>
+
+<!-- Garde petit écran : Casmo n'est pas pris en charge sur téléphone
+     (décision AB du 12/09/2026, cible = tablette et ordinateur). Sous
+     700 × 450 px de fenêtre — seule et unique condition —, cet écran remplace
+     le jeu ; le moteur le retire dès que la fenêtre redevient assez grande,
+     sans rechargement et sans toucher à la partie en cours, qui reste en
+     pause dessous. Le bouton du bas est l'issue de secours du parent : sans
+     lui, la garde (z-index 20) enfermerait l'adulte hors de ses propres
+     réglages. -->
+<div id="ecran-format" hidden>
+  <div class="titre-carte">
+    <h1>Casmo</h1>
+    <h2>La Vallée des Dinosaures</h2>
+    <p>Casmo se joue sur une tablette ou sur un ordinateur : le T-Rex a besoin d'un grand écran pour courir et sauter.</p>
+    <p class="format-astuce">Sur un ordinateur, agrandis la fenêtre et le jeu revient tout seul !</p>
+    <button id="format-passer">Parent : jouer quand même sur cet écran</button>
+  </div>
+</div>
+
+<script src="loader.js" data-jeu="casmo" data-scripts="casmo_data.js casmo_game.js" data-voix="avance"></script>
+</body>
+</html>

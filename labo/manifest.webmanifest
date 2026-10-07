@@ -1,0 +1,16 @@
+{
+  "name": "Le Labo des petits lecteurs",
+  "short_name": "Labo lecteurs",
+  "description": "Assemble des syllabes au doigt pour fabriquer des mots : un laboratoire de lecture pour les 5-10 ans.",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#eef2ff",
+  "theme_color": "#1e3a5f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

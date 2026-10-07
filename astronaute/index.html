@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Petit Astronaute — Apprendre à lire</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<!-- Ajout à l'écran d'accueil (iPad, Android) + jeu hors-ligne. Le manifeste
+     porte le nom, les icônes et le mode d'affichage ; sur iOS/iPadOS il ne
+     remplace PAS les metas « apple- » ci-dessous (mode application, titre sous
+     l'icône, barre d'état). Sur la meta viewport, viewport-fit=cover est la
+     condition pour qu'iOS renseigne les env(safe-area-inset-*) utilisés plus
+     bas ; user-scalable=no est conservé pour les navigateurs qui l'honorent
+     encore (Safari iOS ne l'honore plus : c'est touch-action qui fait le
+     travail ici). Le manifeste et les icônes sont produits par le script de
+     construction — les liens sont déclarés même si les fichiers arrivent
+     après. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Astronaute">
+<!-- teinte prise dans le fond réel du jeu : deuxième arrêt du dégradé du body
+     (radial-gradient … #1b2559 → #0b1030 → #060818), soit le bleu nuit qui
+     domine l'écran -->
+<meta name="theme-color" content="#0b1030">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<style>
+  :root {
+    /* zones sûres : valent 0 partout sauf sur un appareil à encoche ou à
+       indicateur d'accueil, et seulement si la meta viewport porte
+       viewport-fit=cover (voir en tête de fichier) */
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+  /* overscroll-behavior : coupe le tirer-pour-rafraîchir et le rebond de fin
+     de page, que le doigt déclenche sans cesse en jouant */
+  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body {
+    position: fixed; inset: 0;
+    font-family: "Comic Sans MS", "Chalkboard SE", "Arial Rounded MT Bold", -apple-system, sans-serif;
+    background: radial-gradient(ellipse at 30% 10%, #1b2559 0%, #0b1030 55%, #060818 100%);
+    color: #fff;
+    /* Gestes natifs iOS. « manipulation » supprime le zoom par double-tap sur
+       toute la page (user-scalable=no n'est plus honoré par Safari iOS) sans
+       interdire le défilement des écrans qui en ont besoin — contrairement à
+       « none », qui figerait tout. -webkit-touch-callout coupe le menu
+       contextuel au maintien du doigt (un enfant reste appuyé sur une lettre
+       et Safari lui propose « Copier »), et tap-highlight-color enlève le
+       carré gris que Safari peint sur chaque appui. */
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  [hidden] { display: none !important; }
+
+  .screen { display: none; position: absolute; inset: 0; flex-direction: column;
+            align-items: center; justify-content: center;
+            /* « safe center » : quand le contenu déborde (petite fenêtre,
+               écran du clavier), le centrage cède et le haut reste
+               atteignable au défilement. Valeur ignorée par les navigateurs
+               qui ne la connaissent pas, qui gardent le centrage simple. */
+            justify-content: safe center;
+            gap: 26px;
+            padding: calc(24px + var(--sat)) calc(24px + var(--sar))
+                     calc(24px + var(--sab)) calc(24px + var(--sal));
+            overflow: auto; touch-action: pan-y; }
+  .screen.visible { display: flex; }
+
+  /* étoiles décoratives CSS (écrans menus) */
+  .ciel::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .8;
+    background-image:
+      radial-gradient(1.5px 1.5px at 12% 22%, #fff, transparent),
+      radial-gradient(2px 2px at 78% 12%, #ffe9a8, transparent),
+      radial-gradient(1.5px 1.5px at 55% 35%, #fff, transparent),
+      radial-gradient(1px 1px at 30% 70%, #cfe4ff, transparent),
+      radial-gradient(2px 2px at 88% 62%, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 8% 85%, #ffe9a8, transparent),
+      radial-gradient(1px 1px at 66% 88%, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 42% 8%, #cfe4ff, transparent);
+  }
+
+  h1 { font-size: clamp(34px, 6vw, 64px); text-align: center; line-height: 1.15;
+       text-shadow: 0 4px 24px rgba(120,160,255,.45); }
+  h2 { font-size: clamp(24px, 4vw, 40px); text-align: center; }
+  .sous { font-size: clamp(16px, 2.2vw, 24px); color: #aebcf0; text-align: center; }
+
+  button { font-family: inherit; color: inherit; cursor: pointer; border: none; background: none;
+           touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  button:focus-visible { outline: 4px solid #ffd54f; outline-offset: 3px; }
+
+  .gros-bouton {
+    font-size: clamp(26px, 4vw, 44px); font-weight: bold; padding: 22px 64px;
+    border-radius: 60px; color: #1a1035;
+    background: linear-gradient(180deg, #ffe082, #ffb300);
+    box-shadow: 0 8px 0 #b07800, 0 16px 40px rgba(255,180,0,.35);
+    transition: transform .08s;
+  }
+  .gros-bouton:active { transform: translateY(6px); box-shadow: 0 2px 0 #b07800; }
+
+  .titre-fusee { font-size: clamp(70px, 12vw, 140px); animation: flotte 3.2s ease-in-out infinite; }
+  @keyframes flotte { 0%,100% { transform: translateY(0) rotate(-4deg); }
+                      50% { transform: translateY(-22px) rotate(4deg); } }
+
+  /* --- profils ------------------------------------------------------------ */
+  #profils-liste { display: flex; flex-wrap: wrap; gap: 26px; justify-content: center; max-width: 900px; }
+  .carte-profil {
+    width: 170px; padding: 22px 12px; border-radius: 26px;
+    background: rgba(255,255,255,.08); border: 3px solid rgba(255,255,255,.25);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: transform .12s, border-color .12s;
+  }
+  /* :hover ne vaut que pour une vraie souris — au doigt, iOS le colle après
+     l'appui et le laisse allumé sur la carte précédente. Le retour d'appui
+     tactile, lui, passe par :active (règle juste en dessous). */
+  @media (hover: hover) {
+    .carte-profil:hover { transform: scale(1.06); border-color: #ffd54f; }
+  }
+  .carte-profil:active { transform: scale(.94); border-color: #ffd54f;
+                         background: rgba(255,213,79,.28); }
+  .carte-profil .avatar { font-size: 64px; }
+  .carte-profil .pnom { font-size: 24px; font-weight: bold; }
+  .carte-profil .pstars { font-size: 17px; color: #ffd54f; }
+  .carte-plus { border-style: dashed; color: #aebcf0; }
+
+  /* --- nouveau profil ------------------------------------------------------ */
+  #np-avatars { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .np-avatar { font-size: 46px; padding: 8px 14px; border-radius: 18px;
+               border: 3px solid transparent; background: rgba(255,255,255,.07); }
+  .np-avatar.actif { border-color: #ffd54f; background: rgba(255,213,79,.18); }
+  .np-avatar:active { transform: scale(.92); background: rgba(255,213,79,.34); }
+  #np-nom { font-size: 44px; min-height: 60px; letter-spacing: 2px;
+            border-bottom: 4px dotted #aebcf0; padding: 0 30px; }
+  #np-clavier { display: grid; grid-template-columns: repeat(9, 1fr); gap: 10px; max-width: 720px; }
+  .touche { font-size: 26px; font-weight: bold; padding: 12px 0; width: 66px;
+            border-radius: 14px; background: rgba(255,255,255,.1);
+            border: 2px solid rgba(255,255,255,.2); }
+  .touche:active { background: rgba(255,213,79,.3); }
+  .touche-large { width: 100%; grid-column: span 2; }
+  .rangee-boutons { display: flex; gap: 20px; }
+  .bouton-moyen { font-size: 24px; font-weight: bold; padding: 14px 34px; border-radius: 40px;
+                  background: rgba(255,255,255,.12); border: 3px solid rgba(255,255,255,.3); }
+  .bouton-moyen:not(:disabled):active { transform: scale(.94);
+                                        background: rgba(255,213,79,.32); border-color: #ffd54f; }
+  .bouton-moyen:disabled { opacity: .35; cursor: default; }
+  .bouton-valider { background: linear-gradient(180deg, #a5d6a7, #43a047); color: #0c2310;
+                    border-color: #2e7d32; }
+
+  /* --- carte des planètes -------------------------------------------------- */
+  /* barres du haut : décalées de la zone sûre, sinon l'encoche ou la barre
+     d'état d'un iPad en mode application mange le bouton « Retour » */
+  .barre-haut { position: absolute; top: calc(14px + var(--sat));
+              left: calc(20px + var(--sal)); right: calc(20px + var(--sar)); z-index: 10;
+              display: flex; justify-content: space-between; align-items: center; font-size: 20px;
+              gap: 12px; flex-wrap: wrap; }
+  #screen-map { justify-content: flex-start; padding-top: calc(76px + var(--sat)); gap: 14px; }
+  #screen-map h2 { font-size: clamp(20px, 3vw, 30px); }
+  #map-planetes { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; max-width: 1180px; }
+  .planete {
+    width: 150px; padding: 12px 8px 10px; border-radius: 24px;
+    background: rgba(255,255,255,.06); border: 3px solid var(--pc, #888);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    transition: transform .12s; box-shadow: 0 0 30px -12px var(--pc, #888);
+  }
+  @media (hover: hover) {
+    .planete:not(.verrou):hover { transform: scale(1.07); }
+  }
+  .planete:not(.verrou):active { transform: scale(.94); background: rgba(255,213,79,.26);
+                                 box-shadow: 0 0 34px -6px var(--pc, #888); }
+  .planete.verrou { opacity: .4; border-color: #556; box-shadow: none; cursor: default; }
+  .pl-emoji { font-size: 48px; }
+  .pl-nom { font-size: 17px; font-weight: bold; text-align: center; line-height: 1.15; }
+  .pl-stars { font-size: 14px; color: #ffd54f; min-height: 18px; }
+  #map-fusee { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  #map-fusee-canvas { width: 110px; height: 110px; }
+  #map-fusee-txt { font-size: 18px; color: #aebcf0; }
+  .icone-ronde { font-size: 24px; padding: 10px 16px; border-radius: 40px;
+                 background: rgba(255,255,255,.12); border: 3px solid rgba(255,255,255,.3);
+                 min-width: 64px; min-height: 64px; }
+  .icone-ronde:active { transform: scale(.92); background: rgba(255,213,79,.32); border-color: #ffd54f; }
+
+  /* --- niveaux -------------------------------------------------------------- */
+  #lv-grille { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; max-width: 1050px; }
+  .niveau {
+    width: 185px; min-height: 130px; padding: 14px 10px; border-radius: 22px;
+    background: rgba(255,255,255,.07); border: 3px solid var(--pc, #888);
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  @media (hover: hover) {
+    .niveau:not(.verrou):hover { transform: scale(1.06); }
+  }
+  .niveau:not(.verrou):active { transform: scale(.94); background: rgba(255,213,79,.26); }
+  .niveau.verrou { opacity: .38; border-color: #556; cursor: default; }
+  .nv-num { font-size: 30px; font-weight: bold; }
+  .nv-nom { font-size: 16px; text-align: center; color: #dbe4ff; line-height: 1.25; }
+  .nv-stars { font-size: 20px; color: #ffd54f; }
+  .nv-stars .off, #res-stars .off { color: rgba(255,255,255,.18); }
+
+  /* niveau bonus « météorites folles » + planète du prénom : habillage doré */
+  .bonus-niveau:not(.verrou), .planete-prenom:not(.verrou) {
+    border-color: #ffd54f; background: rgba(255,213,79,.10);
+    box-shadow: 0 0 26px -8px #ffd54f;
+  }
+  .bonus-niveau:not(.verrou) .nv-nom, .planete-prenom:not(.verrou) .pl-nom { color: #ffe082; }
+
+  /* --- jeu ------------------------------------------------------------------ */
+  /* l'écran de jeu ne défile jamais : le canvas occupe exactement le cadre et
+     le doigt qui glisse dessus vise une météorite, pas la page */
+  #screen-game { padding: 0; gap: 0; justify-content: flex-start;
+                 overflow: hidden; touch-action: none; }
+  #hud { position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+         display: flex; align-items: center; justify-content: space-between;
+         padding: calc(12px + var(--sat)) calc(18px + var(--sar)) 12px calc(18px + var(--sal));
+         pointer-events: none; }
+  #hud > * { pointer-events: auto; }
+  /* Cibles du HUD : plancher de 64 px dans les deux dimensions (repère de
+     Casmo), obtenu par min-width / min-height et non par le corps de police —
+     les emojis gardent leur taille. Mesuré avant correction au doigt :
+     « Réécouter » 40 × 57 px et « Voir » 38 × 54 px, sous le plancher de
+     44 px recommandé, sur un HUD que l'enfant vise en pleine partie. */
+  #hud-retour, #hud-ecoute, #hud-voir, .hud-cible {
+    min-width: 64px; min-height: 64px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #hud-retour { font-size: 26px; padding: 8px 16px; border-radius: 16px;
+                background: rgba(255,255,255,.12); }
+  #hud-centre { display: flex; align-items: center; gap: 16px;
+                background: rgba(10,14,40,.75); border: 3px solid #ffd54f;
+                border-radius: 26px; padding: 8px 24px; }
+  #hud-ecoute { font-size: 40px; border-radius: 18px; }
+  #hud-voir { font-size: 38px; opacity: 1; border-radius: 18px; }
+  @keyframes pulse-son { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.3); } }
+  #hud-ecoute.pulse, #hud-voir.pulse { animation: pulse-son 1s ease-in-out 4; }
+  #hud-retour.arme { background: #e57373; }
+  /* retour d'appui : un enfant qui touche « Réécouter » doit voir tout de
+     suite que le doigt a été pris, même avant que la voix ne démarre */
+  #hud-ecoute:active, #hud-voir:active, .hud-cible:active {
+    transform: scale(.88); background: rgba(255,213,79,.34);
+  }
+  #hud-retour:active { transform: scale(.9); background: rgba(255,213,79,.34); }
+  .hud-cible { font-weight: bold; font-size: 52px; line-height: 1; min-width: 64px;
+               text-align: center; cursor: pointer; border-radius: 18px; }
+  .hud-cible.mot { font-size: 40px; }
+  .hud-cible.cache { color: #8fa3d8; }
+  #hud-droite { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #hud-progres { font-size: 20px; background: rgba(10,14,40,.75);
+                 border-radius: 18px; padding: 10px 16px; display: flex; flex-direction: column;
+                 align-items: flex-end; gap: 2px; }
+  .prog-fusees { font-size: 15px; letter-spacing: 2px; color: #ffd54f; }
+  #hud-combo { font-size: 26px; font-weight: bold; color: #ffb300;
+               background: rgba(10,14,40,.75); border-radius: 16px; padding: 4px 14px;
+               opacity: 0; transform: scale(.6); transition: opacity .15s, transform .15s;
+               text-shadow: 0 0 14px rgba(255,180,0,.7); }
+  #hud-combo.actif { opacity: 1; transform: scale(1); }
+  #jeu-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+
+  /* mascotte */
+  /* la mascotte est en bas à gauche : en mode application plein écran, la
+     barre d'accueil de l'iPad lui passerait dessus sans la zone sûre */
+  #mascotte { position: absolute; bottom: calc(14px + var(--sab)); left: calc(18px + var(--sal));
+              font-size: 68px; z-index: 6;
+              pointer-events: none; filter: drop-shadow(0 4px 8px rgba(0,0,0,.4)); }
+  @keyframes m-saute { 0%,100% { transform: translateY(0) scale(1); }
+                       35% { transform: translateY(-26px) scale(1.15); } }
+  @keyframes m-triste { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-12deg); }
+                        75% { transform: rotate(12deg); } }
+  @keyframes m-fete { 0%,100% { transform: translateY(0) rotate(-6deg); }
+                      50% { transform: translateY(-18px) rotate(6deg); } }
+  #mascotte.saute { animation: m-saute .5s ease; }
+  #mascotte.triste { animation: m-triste .5s ease; }
+  #res-mascotte.fete, #mascotte.fete { animation: m-fete .7s ease infinite; }
+  #mascotte.halo-vert { filter: drop-shadow(0 0 14px #7cf29a) drop-shadow(0 4px 8px rgba(0,0,0,.4)); }
+  #mascotte.halo-rouge { filter: drop-shadow(0 0 14px #ff7b7b) drop-shadow(0 4px 8px rgba(0,0,0,.4)); }
+
+  /* --- résultats -------------------------------------------------------------- */
+  #screen-results { gap: 12px; }
+  #res-mascotte { font-size: 70px; }
+  #res-fusee { display: none; flex-direction: column; align-items: center; }
+  #res-fusee-canvas { width: 120px; height: 130px; }
+  #res-stars { font-size: clamp(60px, 10vw, 110px); color: #ffd54f;
+               text-shadow: 0 0 40px rgba(255,213,79,.6); }
+  #res-msg { font-size: 24px; color: #ffe082; text-align: center; min-height: 32px; }
+  #res-suivant { font-size: 30px; padding: 18px 44px; }
+
+  /* --- réglages parent ------------------------------------------------------- */
+  #screen-settings h2 { margin-bottom: 6px; }
+  .set-ligne { display: flex; align-items: center; gap: 18px; font-size: 22px;
+               background: rgba(255,255,255,.06); border-radius: 18px; padding: 14px 24px;
+               min-width: 460px; justify-content: space-between; }
+  .set-label { color: #dbe4ff; }
+  #set-vitesse { display: flex; gap: 10px; }
+  .set-choix { font-size: 20px; padding: 8px 20px; border-radius: 30px;
+               background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.2); }
+  .set-choix.actif { background: #ffd54f; color: #1a1035; border-color: #ffd54f; }
+  .set-toggle { font-size: 20px; padding: 8px 18px; border-radius: 30px;
+                background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.25); }
+  #set-reset { font-size: 20px; padding: 12px 26px; border-radius: 30px;
+               background: rgba(255,255,255,.08); border: 2px solid #e5737388; color: #ffbcbc; }
+  #set-reset.danger-arme { background: #e57373; color: #2a0808; border-color: #e57373; }
+  #gate-choix .set-choix { font-size: 42px; padding: 20px 42px; font-weight: bold; }
+  /* écran des parents : les réponses de la porte-calcul et les réglages sont
+     aussi tapés au doigt, ils ont droit au même retour d'appui */
+  .set-choix:active, .set-toggle:active, #set-reset:active {
+    transform: scale(.94); background: rgba(255,213,79,.34); border-color: #ffd54f; color: #1a1035;
+  }
+
+  /* --- garde petit écran (cible : tablette et ordinateur) ---------------------
+     CÂBLÉ ET VÉRIFIÉ. Le pilotage vit dans game.js (majGarde, seuil unique de
+     700 × 450 px, exemption quand un champ de saisie a le focus, écoute du
+     redimensionnement et de la rotation, issue de secours persistée dans les
+     réglages et reprise depuis les réglages parents). L'attribut « hidden »
+     est l'état de départ, retiré et remis par le script au fil des formats.
+     Ne PAS lire ce bloc comme du code mort : les identifiants « #ecran-format »
+     (l'écran) et « #format-passer » (l'issue de secours) sont cherchés par
+     game.js, comme dans Casmo.
+     POURQUOI UNE ISSUE DE SECOURS : l'écran est en z-index 20, au-dessus des
+     menus. Sans ce bouton, un parent dont la fenêtre passe sous le seuil ne
+     peut plus atteindre les réglages du jeu — Casmo a dû l'ajouter en
+     quatrième passe pour cette raison. Le bouton est écrit pour un adulte et
+     rendu discret, pour qu'un enfant de 5 ans n'y lise pas « Jouer ». */
+  #ecran-format {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    /* même filet que sur les écrans de jeu : sur une fenêtre très basse, le
+       centrage cède pour que le haut de la carte — et donc l'issue de secours
+       en dessous — reste atteignable au défilement */
+    align-items: safe center;
+    padding: calc(4vw + var(--sat)) calc(4vw + var(--sar))
+             calc(4vw + var(--sab)) calc(4vw + var(--sal));
+    background: radial-gradient(ellipse at 50% 18%, #1b2559 0%, #0b1030 58%, #060818 100%);
+    text-align: center; overflow: auto; touch-action: pan-y;
+  }
+  #ecran-format .format-carte {
+    width: min(94%, 520px); padding: 26px 24px 20px; border-radius: 28px;
+    background: rgba(255,255,255,.07); border: 3px solid rgba(255,255,255,.25);
+    box-shadow: 0 18px 44px rgba(3,6,20,.45);
+  }
+  .format-fusee { font-size: clamp(48px, 13vw, 84px); line-height: 1; }
+  #ecran-format h1 { font-size: clamp(26px, 8vw, 44px); margin-top: .15em; }
+  #ecran-format p { font-size: clamp(13px, 3.6vw, 18px); color: #dbe4ff;
+                    line-height: 1.35; margin-top: .85em; }
+  #ecran-format .format-astuce { color: #ffe082; }
+  /* volontairement discret (petit, sans fond, souligné) MAIS visé au doigt :
+     plancher de cible tactile obtenu par la hauteur, pas par le corps de
+     police */
+  #format-passer {
+    margin-top: 1.5em; background: none; border: none; color: #aebcf0;
+    font-size: clamp(11px, 2.6vw, 14px); text-decoration: underline;
+    text-underline-offset: 3px; opacity: .74; padding: .5em .8em;
+    min-height: 44px;
+  }
+  #format-passer:active { opacity: 1; color: #ffe082; }
+</style>
+</head>
+<body>
+
+  <!-- Titre -->
+  <section id="screen-title" class="screen ciel visible">
+    <div class="titre-fusee">🚀</div>
+    <h1>Petit Astronaute</h1>
+    <div class="sous">Apprends à lire en attrapant les lettres de l'espace !</div>
+    <button id="btn-jouer" class="gros-bouton">JOUER</button>
+  </section>
+
+  <!-- Choix du profil -->
+  <section id="screen-profiles" class="screen ciel">
+    <h2>Qui joue aujourd'hui ?</h2>
+    <div id="profils-liste"></div>
+  </section>
+
+  <!-- Nouveau profil -->
+  <section id="screen-newprofile" class="screen ciel">
+    <h2>Choisis ton vaisseau et écris ton prénom</h2>
+    <div id="np-avatars"></div>
+    <div id="np-nom">…</div>
+    <div id="np-clavier"></div>
+    <div class="rangee-boutons">
+      <button id="np-retour" class="bouton-moyen">↩ Retour</button>
+      <button id="np-ok" class="bouton-moyen bouton-valider" disabled>C'est parti ! ✓</button>
+    </div>
+  </section>
+
+  <!-- Carte des planètes -->
+  <section id="screen-map" class="screen ciel">
+    <div class="barre-haut">
+      <span id="map-joueur"></span>
+      <span>
+        <button id="map-changer" class="bouton-moyen">👥 Changer de joueur</button>
+        <button id="map-reglages" class="icone-ronde" title="Réglages (parent)">⚙️</button>
+        <button id="map-plein" class="icone-ronde" title="Plein écran">⛶</button>
+      </span>
+    </div>
+    <h2>Choisis ta planète !</h2>
+    <div id="map-planetes"></div>
+    <div id="map-fusee">
+      <canvas id="map-fusee-canvas"></canvas>
+      <div id="map-fusee-txt"></div>
+    </div>
+  </section>
+
+  <!-- Niveaux d'un monde -->
+  <section id="screen-levels" class="screen ciel">
+    <div class="barre-haut">
+      <button id="lv-retour" class="bouton-moyen">↩ Planètes</button>
+    </div>
+    <h2 id="lv-titre"></h2>
+    <div id="lv-grille"></div>
+  </section>
+
+  <!-- Jeu -->
+  <section id="screen-game" class="screen">
+    <canvas id="jeu-canvas"></canvas>
+    <div id="hud">
+      <button id="hud-retour">↩</button>
+      <div id="hud-centre">
+        <button id="hud-ecoute" title="Réécouter">🔊</button>
+        <div id="hud-cible" class="hud-cible cache">?</div>
+        <button id="hud-voir" title="Voir la réponse">👀</button>
+      </div>
+      <div id="hud-droite">
+        <div id="hud-combo"></div>
+        <div id="hud-progres"></div>
+      </div>
+    </div>
+    <div id="mascotte">👽</div>
+  </section>
+
+  <!-- Résultats -->
+  <section id="screen-results" class="screen ciel">
+    <div id="res-mascotte">👽</div>
+    <h2 id="res-titre">Mission accomplie !</h2>
+    <div id="res-stars"></div>
+    <div id="res-fusee"><canvas id="res-fusee-canvas"></canvas></div>
+    <div id="res-msg"></div>
+    <div class="rangee-boutons">
+      <button id="res-rejouer" class="bouton-moyen">↺ Rejouer</button>
+      <button id="res-suivant" class="bouton-moyen bouton-valider">Niveau suivant ➜</button>
+      <button id="res-carte" class="bouton-moyen">🗺 Carte</button>
+    </div>
+  </section>
+
+  <!-- Porte adulte (avant les réglages) -->
+  <section id="screen-gate" class="screen ciel">
+    <div class="barre-haut">
+      <button id="gate-retour" class="bouton-moyen">↩ Retour</button>
+    </div>
+    <h2 id="gate-question">Réservé aux parents</h2>
+    <div id="gate-choix" class="rangee-boutons"></div>
+  </section>
+
+  <!-- Réglages (parent) -->
+  <section id="screen-settings" class="screen ciel">
+    <div class="barre-haut">
+      <button id="set-retour" class="bouton-moyen">↩ Retour</button>
+    </div>
+    <h2>Réglages</h2>
+    <div class="sous">Pour les parents</div>
+    <div class="set-ligne">
+      <span class="set-label">Vitesse du jeu</span>
+      <span id="set-vitesse"></span>
+    </div>
+    <div class="set-ligne">
+      <span class="set-label">Quantité de météorites</span>
+      <span id="set-densite" style="display:flex;gap:10px"></span>
+    </div>
+    <div class="set-ligne">
+      <span class="set-label">Débloquer toutes les planètes</span>
+      <button id="set-unlock" class="set-toggle"></button>
+    </div>
+    <div class="set-ligne">
+      <span class="set-label">Son</span>
+      <button id="set-son" class="set-toggle"></button>
+    </div>
+    <div class="set-ligne">
+      <span class="set-label">Progression du joueur</span>
+      <button id="set-reset"></button>
+    </div>
+  </section>
+
+  <!-- Garde petit écran — CÂBLÉE ET VÉRIFIÉE (pilotage dans game.js).
+       Le Petit Astronaute se joue sur tablette ou sur ordinateur : le
+       téléphone n'est pas pris en charge. Sous le seuil retenu pour la lignée
+       (fenêtre de 700 × 450 points), cet écran remplace le jeu ; le moteur le
+       lève et le baisse au redimensionnement comme à la rotation, sans
+       rechargement, et met la partie en pause pendant ce temps. L'attribut
+       « hidden » est l'état de départ, que le script retire et remet.
+       Le bouton du bas est l'issue de secours du parent : la garde est en
+       z-index 20, au-dessus des menus, donc sans lui l'adulte se retrouverait
+       enfermé hors de ses propres réglages. Son choix est mémorisé et se
+       reprend depuis les réglages parents (ligne « Petits écrans »). -->
+  <div id="ecran-format" hidden>
+    <div class="format-carte">
+      <div class="format-fusee">🚀</div>
+      <h1>Petit Astronaute</h1>
+      <p>Ce jeu se joue sur une tablette ou sur un ordinateur : les lettres ont besoin d'un grand ciel pour tomber.</p>
+      <p class="format-astuce">Sur un ordinateur, agrandis la fenêtre et le jeu revient tout seul !</p>
+      <button id="format-passer" type="button">Parent : jouer quand même sur cet écran</button>
+    </div>
+  </div>
+
+<script src="loader.js" data-jeu="astronaute" data-scripts="data.js game.js" data-voix="paresseux"></script>
+</body>
+</html>

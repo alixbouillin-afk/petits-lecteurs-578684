@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Le Labo des petits lecteurs</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Labo lecteurs">
+<meta name="theme-color" content="#1e3a5f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<!--
+  « Le Labo des petits lecteurs » (09/09/2026) — troisième jeu de la lignée
+  (Petit Astronaute = reconnaissance, Casmo = encodage dicté). Ici : bac à
+  sable TACTILE de fusion syllabique. Des syllabes écrites sont éparpillées ;
+  l'enfant les glisse au doigt : deux syllabes s'aimantent quand elles forment
+  le début d'un mot du monde choisi (lecture gauche → droite, la syllabe
+  déplacée se range du bon côté toute seule — « deux aimants qui se mettent
+  dans le bon sens »), le bloc se prononce ; mot complet = fiche (emoji, mot,
+  phrase lue). Syllabes incompatibles = répulsion, jamais de sanction.
+  Cibles : iPad (Safari, PWA plein écran) + navigateur de bureau.
+  Fichiers : index.html (coquille) · labo_data.js (mondes, lexique, règles,
+  validerLexique) · labo_game.js (moteur) · sw.js (hors-ligne) · audio/*.m4a
+  (voix Denise : LS_ syllabes, LW_ mots, LD_ phrases, LU_ interface, UI_ bravos
+  réutilisés du Petit Astronaute).
+  QA : ?qa=lexique · ?qa=selftest (assemble tous les mots de tous les mondes,
+  verdict dans le titre) · ?qa=monde=ID[&palier=1|2] (ouvre direct un monde).
+-->
+<style>
+  :root {
+    --accent: #5c6bc0; --accent-2: #9fa8da; --fond-1: #eef2ff; --fond-2: #dfe6fb;
+    --encre: #26313f; --creme: #fffdf5; --or: #ffb300;
+    --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+    --tuile: clamp(30px, 5.2vmin, 50px);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body {
+    position: fixed; inset: 0;
+    font-family: "Chalkboard SE", "Comic Sans MS", "Arial Rounded MT Bold", -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, var(--fond-1), var(--fond-2));
+    color: var(--encre);
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    touch-action: none; -webkit-tap-highlight-color: transparent;
+    padding: var(--sat) var(--sar) var(--sab) var(--sal);
+  }
+  button { font-family: inherit; cursor: pointer; touch-action: manipulation; }
+  button:focus-visible, input:focus-visible { outline: 4px solid var(--or); outline-offset: 3px; }
+  [hidden] { display: none !important; }
+
+  /* ---------------------------------------------------------- écrans --- */
+  .ecran {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2.4vmin; text-align: center;
+    padding: calc(var(--sat) + 2vmin) calc(var(--sar) + 3vmin) calc(var(--sab) + 2vmin) calc(var(--sal) + 3vmin);
+    overflow: auto; z-index: 5; background: linear-gradient(160deg, var(--fond-1), var(--fond-2));
+    touch-action: pan-y;          /* les écrans défilants gardent leur défilement mais pas le zoom par double-tap */
+  }
+  .ecran h1 { font-size: clamp(26px, 6vmin, 58px); color: var(--accent); text-shadow: 0 2px 0 #fff; }
+  .ecran h2 { font-size: clamp(20px, 4vmin, 36px); color: var(--encre); }
+  .ecran p { font-size: clamp(15px, 2.6vmin, 22px); max-width: 80vw; line-height: 1.35; }
+  .gros {
+    font-weight: bold; color: #4a2c00; font-size: clamp(18px, 3.4vmin, 30px);
+    padding: .5em 1.3em; border: none; border-radius: 20px;
+    background: linear-gradient(180deg, #ffe082, #ffb300); box-shadow: 0 6px 20px -6px #c58a00;
+  }
+  .gros:active { transform: scale(.96); }
+  .doux {
+    font-weight: bold; color: var(--encre); font-size: clamp(14px, 2.4vmin, 20px);
+    padding: .45em 1em; border-radius: 16px; background: #fff; border: 3px solid var(--accent-2);
+    box-shadow: 0 3px 10px rgba(38,49,63,.12);
+  }
+  .doux:active { background: var(--fond-2); }
+  .rangee { display: flex; gap: 2vmin; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .icone {
+    width: 1.15em; height: 1.15em; display: inline-block; flex: none; vertical-align: -.18em;
+    fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* titre */
+  #ecran-titre .labo-logo { font-size: clamp(60px, 16vmin, 150px); line-height: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,.15)); }
+  #ecran-titre .bulles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: -1; }
+  .bulle {
+    position: absolute; bottom: -80px; border-radius: 50%; opacity: .45;
+    background: radial-gradient(circle at 35% 35%, #fff, var(--accent-2));
+    animation: monte linear infinite;
+  }
+  @keyframes monte { from { transform: translateY(0); } to { transform: translateY(-120vh); } }
+
+  /* profils */
+  #profils-liste { display: flex; flex-wrap: wrap; gap: 2vmin; justify-content: center; max-width: 90vw; }
+  .carte-profil {
+    min-width: 26vmin; padding: 2vmin 3vmin; border-radius: 18px; border: 3px solid var(--accent-2);
+    background: #fff; color: var(--encre); font-size: clamp(17px, 3vmin, 26px); font-weight: bold;
+    display: flex; flex-direction: column; align-items: center; gap: .3em; box-shadow: 0 4px 14px rgba(38,49,63,.12);
+  }
+  .carte-profil .cp-palier { font-size: .7em; font-weight: normal; opacity: .8; }
+  .carte-profil:active { transform: scale(.96); }
+  .carte-plus { border-style: dashed; background: rgba(255,255,255,.55); }
+  #np-prenom {
+    font-family: inherit; font-size: clamp(20px, 3.4vmin, 30px); font-weight: bold; text-align: center;
+    width: min(70vw, 360px); padding: .4em .6em; border-radius: 16px; border: 3px solid var(--accent-2);
+    background: #fff; color: var(--encre);
+  }
+  .choix-palier { display: flex; gap: 2vmin; }
+  .btn-palier {
+    padding: 1.4vmin 2.4vmin; border-radius: 16px; border: 3px solid var(--accent-2); background: #fff;
+    font-size: clamp(15px, 2.6vmin, 22px); color: var(--encre); display: flex; flex-direction: column; gap: .2em; align-items: center;
+  }
+  .btn-palier .bp-emoji { font-size: 1.8em; line-height: 1; }
+  .btn-palier.actif { border-color: var(--or); background: #fff8e1; box-shadow: 0 0 0 4px rgba(255,179,0,.35); }
+
+  /* mondes */
+  #mondes-haut { display: flex; align-items: center; gap: 2vmin; flex-wrap: wrap; justify-content: center; }
+  #mondes-grille {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(clamp(150px, 26vmin, 240px), 1fr));
+    gap: 2vmin; width: min(94vw, 1000px);
+  }
+  .carte-monde {
+    position: relative; border-radius: 20px; border: 3px solid rgba(255,255,255,.9); padding: 1.6vmin 1.6vmin 1.4vmin;
+    color: var(--encre); display: flex; flex-direction: column; align-items: center; gap: .4vmin;
+    box-shadow: 0 6px 18px rgba(38,49,63,.14); background: linear-gradient(160deg, #fff, var(--cm-teinte, #eee));
+    transition: transform .12s ease;
+  }
+  .carte-monde:active { transform: scale(.96); }
+  .carte-monde .cm-emoji { font-size: clamp(38px, 8vmin, 72px); line-height: 1.1; }
+  .carte-monde .cm-nom { font-weight: bold; font-size: clamp(14px, 2.5vmin, 21px); }
+  .carte-monde .cm-prog { font-size: clamp(12px, 2vmin, 16px); opacity: .85; }
+  .carte-monde .cm-barre { width: 80%; height: 8px; border-radius: 6px; background: rgba(38,49,63,.12); overflow: hidden; }
+  .carte-monde .cm-barre i { display: block; height: 100%; background: var(--or); border-radius: 6px; }
+  .carte-monde.complet::after {
+    content: "★"; position: absolute; top: 6px; right: 10px; color: var(--or); font-size: clamp(18px, 3.4vmin, 30px);
+    text-shadow: 0 1px 0 #fff;
+  }
+
+  /* --------------------------------------------------------- plateau --- */
+  #jeu { position: absolute; inset: 0; display: flex; flex-direction: column; z-index: 1;
+         padding: var(--sat) var(--sar) var(--sab) var(--sal); }
+  #barre {
+    display: flex; align-items: center; gap: 1.2vmin; padding: 1vmin 1.6vmin; flex: none;
+    background: rgba(255,255,255,.7); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); border-bottom: 2px solid rgba(255,255,255,.9);
+  }
+  #barre .titre-monde { flex: 1; font-weight: bold; font-size: clamp(15px, 2.8vmin, 24px); color: var(--encre);
+                        display: flex; align-items: center; gap: .4em; min-width: 0; overflow: hidden; white-space: nowrap; }
+  #barre .titre-monde .tm-emoji { font-size: 1.3em; line-height: 1; }
+  #barre .titre-monde #tm-nom { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  #barre .hudbtn {
+    font-weight: bold; font-size: clamp(13px, 2.3vmin, 19px); color: var(--encre); padding: .45em .8em;
+    border-radius: 14px; border: 3px solid var(--accent-2); background: #fff; box-shadow: 0 3px 8px rgba(38,49,63,.1);
+    display: flex; align-items: center; gap: .35em; white-space: nowrap;
+  }
+  #barre .hudbtn:active { background: var(--fond-2); }
+  #compteur { font-weight: bold; font-size: clamp(13px, 2.3vmin, 19px); padding: .4em .8em; border-radius: 14px;
+              background: #fff8e1; border: 3px solid #ffd54f; color: #6d4c00; white-space: nowrap; }
+
+  #plateau {
+    position: relative; flex: 1; overflow: hidden; touch-action: none;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255,255,255,.55), transparent 28%),
+      radial-gradient(circle at 88% 82%, rgba(255,255,255,.45), transparent 26%),
+      linear-gradient(160deg, var(--fond-1), var(--fond-2));
+  }
+  #plateau .filigrane {
+    position: absolute; right: 2vmin; bottom: 0; font-size: clamp(120px, 34vmin, 320px); line-height: 1;
+    opacity: .09; pointer-events: none; filter: grayscale(.2);
+  }
+  #plateau .grille {
+    position: absolute; inset: 0; pointer-events: none; opacity: .35;
+    background-image: linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px);
+    background-size: 8vmin 8vmin;
+  }
+
+  /* blocs de syllabes */
+  .bloc {
+    position: absolute; left: 0; top: 0; display: flex; align-items: stretch;
+    border-radius: 16px; will-change: transform; cursor: grab;
+    filter: drop-shadow(0 4px 6px rgba(38,49,63,.22));
+  }
+  .bloc.anim { transition: transform .18s cubic-bezier(.2,.9,.3,1.2); }
+  .bloc.anim-lent { transition: transform .38s cubic-bezier(.2,.9,.3,1.1); }
+  .bloc.drag { z-index: 50; cursor: grabbing; filter: drop-shadow(0 12px 14px rgba(38,49,63,.3)); }
+  .bloc.drag .syl { transform: scale(1.06); }
+  .bloc.apparait > .syl { animation: pop .42s cubic-bezier(.2,.9,.3,1.35) both; }
+  @keyframes pop { from { transform: scale(0) rotate(-8deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
+  .syl {
+    font-size: var(--tuile); font-weight: bold; line-height: 1; letter-spacing: .01em;
+    padding: .38em .5em .42em; background: var(--creme); color: var(--encre);
+    border: 3px solid rgba(38,49,63,.18); border-radius: 16px; transition: transform .12s ease, background .2s;
+    display: flex; align-items: center; justify-content: center; min-width: 2.1em;
+    box-shadow: inset 0 -5px 0 rgba(38,49,63,.08);
+  }
+  .syl.moitie-l { border-right-width: 0; border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+  .syl.moitie-r { border-left-width: 0; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+  .syl.moitie-m { border-left-width: 0; border-right-width: 0; border-radius: 4px; }
+  /* dans un bloc assemblé, les syllabes alternent trois teintes : on VOIT la frontière */
+  .bloc.assemble .syl.c0 { background: #ffe0b2; }
+  .bloc.assemble .syl.c1 { background: #c8e6c9; }
+  .bloc.assemble .syl.c2 { background: #bbdefb; }
+  .bloc.aimant-droite .syl:last-child { box-shadow: 8px 0 0 -1px var(--or), inset 0 -5px 0 rgba(38,49,63,.08); }
+  .bloc.aimant-gauche .syl:first-child { box-shadow: -8px 0 0 -1px var(--or), inset 0 -5px 0 rgba(38,49,63,.08); }
+  .bloc.aimant-droite, .bloc.aimant-gauche { animation: vibre .5s ease-in-out infinite; }
+  @keyframes vibre { 0%,100% { margin-left: 0; } 50% { margin-left: 2px; } }
+  .bloc.brille .syl { background: #fff59d; border-color: var(--or); box-shadow: 0 0 0 4px rgba(255,179,0,.4); }
+  .bloc.brille { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { filter: drop-shadow(0 4px 6px rgba(38,49,63,.22)); } 50% { filter: drop-shadow(0 0 14px rgba(255,179,0,.9)); } }
+  .bloc.gagne .syl { background: #fff176; border-color: var(--or); }
+  .bloc.gagne { animation: saute .5s ease-in-out 2; z-index: 40; }
+  @keyframes saute { 0%,100% { margin-top: 0; } 40% { margin-top: -22px; } }
+  .bloc.oups, #np-prenom.oups { animation: secoue .32s ease-in-out; }
+  /* écoute d'une tuile : pulsation dorée, distincte de la secousse de refus */
+  .bloc.ecoute .syl { background: #fff59d; }
+  .bloc.ecoute { animation: ecoute .45s ease-out; }
+  @keyframes ecoute { 0% { transform: scale(1); } 40% { transform: scale(1.1); } 100% { transform: scale(1); } }
+  /* mot en cours : « … » à droite tant qu'il manque des syllabes */
+  .bloc.prefixe::after {
+    content: "…"; position: absolute; right: -22px; bottom: 6px; font-size: calc(var(--tuile) * .8);
+    font-weight: bold; color: var(--accent); opacity: .7; animation: clignote 1.2s ease-in-out infinite;
+  }
+  @keyframes clignote { 0%,100% { opacity: .25; } 50% { opacity: .9; } }
+  /* s qui se lit /z/ (entre deux voyelles) : en bleu */
+  .syl .s-doux { font-style: normal; color: #1565c0; }
+  @keyframes secoue { 0%,100% { margin-left: 0; } 25% { margin-left: -7px; } 75% { margin-left: 7px; } }
+  .bloc .ciseaux {
+    position: absolute; left: 50%; bottom: -52px; transform: translateX(-50%); width: 48px; height: 48px; border-radius: 50%;
+    background: #fff; border: 3px solid var(--accent-2); font-size: 24px; line-height: 1; display: flex;
+    align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(38,49,63,.2);
+    animation: pop .3s ease both; z-index: 5;
+  }
+  .ghost {
+    position: absolute; left: 0; top: 0; border-radius: 16px; border: 4px dashed var(--or);
+    background: rgba(255,224,130,.28); pointer-events: none; z-index: 45; will-change: transform;
+    transition: transform .08s linear, width .08s linear, height .08s linear;
+  }
+  .ghost::after {
+    content: ""; position: absolute; inset: -10px; border-radius: 22px; border: 2px solid rgba(255,179,0,.35);
+    animation: onde 1s ease-out infinite;
+  }
+  @keyframes onde { from { transform: scale(.9); opacity: .9; } to { transform: scale(1.15); opacity: 0; } }
+  #lien-aide {
+    position: absolute; left: 0; top: 0; height: 0; border-top: 4px dashed var(--or); transform-origin: 0 0;
+    pointer-events: none; z-index: 30; opacity: .75;
+  }
+  .etincelle {
+    position: absolute; left: 0; top: 0; pointer-events: none; z-index: 60; font-size: 26px; line-height: 1;
+    animation: vole .9s ease-out forwards; will-change: transform, opacity;
+  }
+  @keyframes vole { from { opacity: 1; transform: translate(0,0) scale(.6); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.3) rotate(120deg); } }
+
+  /* fiche du mot trouvé */
+  #fiche {
+    position: absolute; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;
+    background: rgba(38,49,63,.35); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  }
+  #fiche .carte {
+    background: #fff; border-radius: 28px; padding: 3vmin 4vmin; width: min(92vw, 620px);
+    display: flex; flex-direction: column; align-items: center; gap: 1.6vmin; text-align: center;
+    box-shadow: 0 24px 60px rgba(0,0,0,.25); border: 4px solid var(--or); animation: pop .45s cubic-bezier(.2,.9,.3,1.3) both;
+  }
+  #fiche .f-emoji { font-size: clamp(80px, 22vmin, 190px); line-height: 1.05; filter: drop-shadow(0 8px 10px rgba(0,0,0,.15)); }
+  #fiche .f-mot { font-size: clamp(30px, 7vmin, 64px); font-weight: bold; display: flex; gap: .08em; }
+  #fiche .f-mot span.c0 { color: #e65100; } #fiche .f-mot span.c1 { color: #2e7d32; } #fiche .f-mot span.c2 { color: #1565c0; }
+  #fiche .f-phrase { font-size: clamp(16px, 3vmin, 26px); line-height: 1.35; color: var(--encre); }
+  #fiche .f-suite { margin-top: .5vmin; }
+  #fiche .f-boutons { display: flex; gap: 2vmin; align-items: center; justify-content: center; flex-wrap: wrap; }
+
+  /* fin de monde */
+  #ov-fin .grosses { font-size: clamp(60px, 18vmin, 160px); line-height: 1; }
+
+  /* carnet */
+  #carnet-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(90px, 16vmin, 140px), 1fr));
+                   gap: 1.6vmin; width: min(94vw, 1000px); max-height: 60vh; overflow: auto; padding: 1vmin; }
+  .carte-mot {
+    background: #fff; border-radius: 16px; border: 3px solid var(--accent-2); padding: 1.2vmin .6vmin;
+    display: flex; flex-direction: column; align-items: center; gap: .3vmin; color: var(--encre);
+    font-size: clamp(13px, 2.2vmin, 18px); font-weight: bold;
+  }
+  .carte-mot .m-emoji { font-size: clamp(34px, 7vmin, 60px); line-height: 1.1; }
+  .carte-mot.vide { opacity: .35; border-style: dashed; }
+  .carte-mot:active { transform: scale(.95); }
+  #carnet-onglets { display: flex; gap: 1vmin; flex-wrap: wrap; justify-content: center; max-width: 94vw; }
+  #carnet-onglets .doux.actif { border-color: var(--or); background: #fff8e1; }
+
+  /* réglages / porte */
+  .set-ligne { display: flex; gap: 1.6vmin; align-items: center; justify-content: center;
+               font-size: clamp(14px, 2.6vmin, 21px); flex-wrap: wrap; }
+  .note-parent { font-size: clamp(11px, 2vmin, 15px) !important; opacity: .8 !important; }
+  #set-stockage-alert { color: #fff; background: #c62828; border-radius: 12px; padding: .4em .75em; }
+  #gate-choix { display: flex; gap: 2vmin; justify-content: center; }
+  .set-choix { font-size: clamp(20px, 4vmin, 32px); font-weight: bold; padding: .35em .8em; border-radius: 16px;
+               border: 3px solid var(--accent-2); background: #fff; color: var(--encre); }
+  #hint { position: absolute; left: 50%; bottom: calc(var(--sab) + 1.2vmin); transform: translateX(-50%);
+          font-size: clamp(12px, 2vmin, 16px); white-space: nowrap; color: var(--encre);
+          background: rgba(255,255,255,.85); border-radius: 12px; padding: .4em .9em; z-index: 3; pointer-events: none;
+          box-shadow: 0 3px 10px rgba(38,49,63,.12); }
+  @media (max-width: 640px) { #barre .hudbtn .lib { display: none; } }
+</style>
+</head>
+<body>
+
+<div id="jeu" hidden>
+  <div id="barre">
+    <button id="btn-mondes" class="hudbtn" aria-label="Retour aux mondes"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></svg><span class="lib">Les mondes</span></button>
+    <div class="titre-monde"><span class="tm-emoji" id="tm-emoji"></span><span id="tm-nom"></span></div>
+    <div id="compteur"></div>
+    <button id="btn-melange" class="hudbtn" aria-label="Mélanger les syllabes"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 7h4l4 5 4 5h6"/><path d="M3 17h4l4-5 4-5h6"/><path d="m18 4 3 3-3 3M18 14l3 3-3 3"/></svg><span class="lib">Mélanger</span></button>
+    <button id="btn-carnet" class="hudbtn" aria-label="Mon carnet de mots"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h12a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4z"/><path d="M4 17a3 3 0 0 1 3-3h12"/><path d="M8 8h7M8 11h5"/></svg><span class="lib">Carnet</span></button>
+  </div>
+  <div id="plateau">
+    <div class="grille"></div>
+    <div class="filigrane" id="filigrane"></div>
+    <div id="lien-aide" hidden></div>
+  </div>
+  <div id="hint" hidden>Glisse une syllabe vers une autre : si elles vont ensemble, elles s'aimantent !</div>
+</div>
+
+<div id="fiche" hidden>
+  <div class="carte">
+    <div class="f-emoji" id="f-emoji"></div>
+    <div class="f-mot" id="f-mot"></div>
+    <p class="f-phrase" id="f-phrase"></p>
+    <div class="f-boutons">
+      <button id="f-ecoute" class="doux" aria-label="Réécouter le mot et la phrase">🔊 Réécouter</button>
+      <button id="f-suite" class="gros f-suite" hidden>▶ Continuer</button>
+    </div>
+  </div>
+</div>
+
+<div id="ecran-titre" class="ecran">
+  <div class="bulles" id="bulles"></div>
+  <div class="labo-logo">🧪</div>
+  <h1>Le Labo des petits lecteurs</h1>
+  <p>Attrape les syllabes et colle-les pour fabriquer des mots !</p>
+  <button id="btn-titre-go" class="gros">▶ Jouer</button>
+</div>
+
+<div id="ecran-profils" class="ecran" hidden>
+  <h2>Qui joue aujourd'hui ?</h2>
+  <div id="profils-liste"></div>
+</div>
+
+<div id="ecran-nouveau-profil" class="ecran" hidden>
+  <div class="choix-palier">
+    <button class="btn-palier actif" data-palier="1"><span class="bp-emoji">🐣</span>Je commence à lire</button>
+    <button class="btn-palier" data-palier="2"><span class="bp-emoji">🦁</span>Je lis déjà un peu</button>
+  </div>
+  <h2>Écris ton prénom !</h2>
+  <input id="np-prenom" maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false">
+  <div class="rangee">
+    <button id="np-ok" class="gros">✓ C'est parti !</button>
+    <button id="np-retour" class="doux">↩ Retour</button>
+  </div>
+</div>
+
+<div id="ecran-mondes" class="ecran" hidden>
+  <div id="mondes-haut">
+    <h2 id="mondes-titre">Choisis un monde !</h2>
+    <button id="btn-profil" class="doux" aria-label="Changer de joueur"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg></button>
+    <button id="btn-carnet2" class="doux" aria-label="Mon carnet de mots"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h12a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4z"/><path d="M4 17a3 3 0 0 1 3-3h12"/><path d="M8 8h7M8 11h5"/></svg></button>
+    <button id="btn-reglages" class="doux" aria-label="Réglages"><svg class="icone" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.38.35.72.65.99.3.27.69.41 1.1.41h.1v4h-.1c-.82 0-1.52.52-1.75 1.3z"/></svg></button>
+  </div>
+  <div id="mondes-grille"></div>
+</div>
+
+<div id="ov-fin" class="ecran" hidden>
+  <div class="grosses" id="fin-emoji">🏆</div>
+  <h2 id="fin-titre"></h2>
+  <p id="fin-texte"></p>
+  <div class="rangee">
+    <button id="fin-rejouer" class="gros">🔁 Rejouer ce monde</button>
+    <button id="fin-mondes" class="doux">🧪 Les autres mondes</button>
+  </div>
+</div>
+
+<div id="ecran-carnet" class="ecran" hidden>
+  <h2 id="carnet-titre">Mon carnet de mots</h2>
+  <div id="carnet-onglets"></div>
+  <div id="carnet-grille"></div>
+  <button id="carnet-retour" class="doux">↩ Retour</button>
+</div>
+
+<div id="ecran-gate" class="ecran" hidden>
+  <h2 id="gate-question"></h2>
+  <div id="gate-choix"></div>
+  <button id="gate-retour" class="doux">↩ Retour</button>
+</div>
+
+<div id="ecran-reglages" class="ecran" hidden>
+  <h2>Réglages (parents)</h2>
+  <div class="set-ligne"><span>Son</span><button id="set-son" class="doux"></button></div>
+  <p class="note-parent">Le Labo lit les syllabes à la voix : sur iPad, vérifie que le mode silencieux est désactivé et le volume monté.</p>
+  <p id="set-stockage-alert" class="note-parent" hidden>Le carnet ne peut pas être sauvegardé sur cet appareil.</p>
+  <div class="set-ligne"><span id="set-palier-lib">Niveau du joueur</span><button id="set-palier" class="doux"></button></div>
+  <p class="note-parent">🐣 Petits : mots de 2-3 syllabes simples (va-che, to-ma-te). 🦁 Grands : tous les mots (sons complexes, syllabes fermées, mots longs).</p>
+  <div class="set-ligne"><span>Taille des syllabes</span><button id="set-taille" class="doux"></button></div>
+  <div class="set-ligne"><button id="set-reset" class="doux">🗑 Effacer le carnet de ce joueur</button></div>
+  <div class="set-ligne"><button id="set-suppr" class="doux">❌ Supprimer ce joueur</button></div>
+  <p class="note-parent">Mode d'emploi : glisser une syllabe vers une autre ; si elles forment le début d'un mot du monde, elles s'aimantent (toujours dans le sens de la lecture) ; sinon elles se repoussent. Toucher une syllabe = l'entendre. Toucher un bloc = le réentendre, puis ✂ pour le détacher. Un mot complet ouvre sa fiche. Un s bleu (se, sau, sin, sée) se lit « z », entre deux voyelles.</p>
+  <p class="note-parent">Sur iPad : installer le Labo sur l'écran d'accueil (Partager → Sur l'écran d'accueil) AVANT de créer les joueurs — l'app installée et Safari ont chacun leur carnet, et Safari efface le sien après 7 jours sans visite.</p>
+  <p class="note-parent" id="set-version"></p>
+  <button id="set-retour" class="doux">↩ Les mondes</button>
+</div>
+
+<script src="loader.js" data-jeu="labo" data-scripts="labo_data.js labo_game.js" data-voix="paresseux"></script>
+</body>
+</html>

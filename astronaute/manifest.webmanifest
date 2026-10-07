@@ -1,0 +1,17 @@
+{
+  "name": "Petit Astronaute — Apprendre à lire",
+  "short_name": "Astronaute",
+  "description": "Des lettres, des syllabes et des mots tombent du ciel : écoute la consigne et attrape le bon astéroïde. 8 planètes, du nom des lettres aux premiers mots, pour les 5-7 ans.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#060818",
+  "theme_color": "#0b1030",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
